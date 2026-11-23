@@ -15,6 +15,10 @@ The server exposes two tools:
 
 No API key is required. No secrets belong in this repo.
 
+## Why I scoped it this way
+
+I chose Open-Meteo because it is useful, free, and needs no API key — so reviewers can run the project without account setup or secret handling. I deliberately kept the surface area small: two tools, strict input checks, and clear failure behaviour. For agent-facing work, I would rather ship a narrow tool with strong boundaries than a broad tool with unclear side effects.
+
 ## Why MCP?
 
 MCP (Model Context Protocol) is a standard way for AI apps (like Claude or Cursor) to call tools you build.
@@ -155,6 +159,17 @@ Run a live smoke check (needs internet, still no API key):
 ```bash
 python scripts/smoke_check.py
 ```
+
+### Quick reviewer path (about 60 seconds)
+
+```bash
+pip install -r requirements.txt
+pip install -e .
+pytest -q
+python scripts/smoke_check.py
+```
+
+If both succeed, the core behaviour and live Open-Meteo path are working.
 
 ## What could go wrong when an AI agent uses this tool?
 
