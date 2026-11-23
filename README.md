@@ -1,45 +1,47 @@
 # Open-Meteo MCP Server
 
-A small **MCP server** that lets an AI agent look up real weather using the free [Open-Meteo](https://open-meteo.com/) API.
+Hi — I’m Vuyolwethu. This is a small MCP server I built so an AI agent can look up real weather using the free [Open-Meteo](https://open-meteo.com/) API.
 
-This was built as a focused take-home for an **Agentic Associate** style role: one useful tool, done carefully, with safety in mind.
+I kept it intentionally small. One useful thing, done carefully, with safety in mind. That’s the kind of work I want to show for an Agentic Associate-style role.
 
 ## What it does
 
-The server exposes two tools:
+It exposes two tools an AI can call:
 
 | Tool | Purpose |
 | --- | --- |
 | `get_current_weather` | Current temperature, humidity, wind, and weather code for a city/town |
 | `get_forecast` | Short daily forecast (1–7 days) for a city/town |
 
-No API key is required. No secrets belong in this repo.
+No API key. No secrets in the repo. You should be able to clone this and run it without setting anything fancy up.
 
-## Why I scoped it this way
+## Why I built it this way
 
-I chose Open-Meteo because it is useful, free, and needs no API key — so reviewers can run the project without account setup or secret handling. I deliberately kept the surface area small: two tools, strict input checks, and clear failure behaviour. For agent-facing work, I would rather ship a narrow tool with strong boundaries than a broad tool with unclear side effects.
+I picked Open-Meteo because it’s useful, free, and doesn’t need an account. That means a reviewer can actually try it quickly.
 
-## Why MCP?
+I also kept the tool surface small on purpose. For anything an AI agent can call, I’d rather ship a narrow tool with clear boundaries than a broad one that can surprise you. Two tools. Strict checks. Clear failures.
 
-MCP (Model Context Protocol) is a standard way for AI apps (like Claude or Cursor) to call tools you build.
+## What MCP means here (in plain English)
 
-Simple flow:
+MCP is just a standard way for AI apps like Claude or Cursor to use tools that I build.
 
-1. User asks an AI about the weather  
-2. AI calls one of these tools  
-3. This server checks the input  
-4. This server calls Open-Meteo  
-5. The AI gets a clean result and answers the user  
+The flow is simple:
+
+1. Someone asks the AI about the weather  
+2. The AI calls one of my tools  
+3. My server checks the input  
+4. My server talks to Open-Meteo  
+5. The AI gets a clean result and answers  
 
 ## Project layout
 
 ```text
 src/weather_mcp/
-  validation.py   # reject bad or unsafe input
+  validation.py   # stop bad / unsafe input early
   client.py       # talk only to Open-Meteo
-  server.py       # expose tools over MCP
+  server.py       # expose the tools over MCP
 tests/            # automated checks
-scripts/          # simple live smoke check
+scripts/          # quick live smoke check
 ```
 
 ## Install
@@ -69,9 +71,9 @@ Or:
 open-meteo-mcp
 ```
 
-The server uses **stdio** (standard for local MCP tools). A host app starts it and talks to it.
+It runs over **stdio**, which is the normal setup for local MCP tools. The host app starts the server and talks to it.
 
-### Example Cursor / Claude Desktop style config
+### Example Cursor / Claude Desktop config
 
 ```json
 {
@@ -88,19 +90,17 @@ The server uses **stdio** (standard for local MCP tools). A host app starts it a
 }
 ```
 
-If you installed the package with `pip install -e .`, you can point `command` at `open-meteo-mcp` instead.
+If you installed with `pip install -e .`, you can point `command` at `open-meteo-mcp` instead.
 
 ## Examples
 
 ### Example 1 — current weather
 
-Tool call:
-
 ```text
 get_current_weather(location="Johannesburg")
 ```
 
-Example successful shape:
+Successful response looks like:
 
 ```json
 {
@@ -123,21 +123,17 @@ Example successful shape:
 
 ### Example 2 — short forecast
 
-Tool call:
-
 ```text
 get_forecast(location="Cape Town", days=3)
 ```
 
-Returns up to 3 daily high/low values.
+That returns up to 3 daily high/low values.
 
-### Example 3 — rejected bad input
+### Example 3 — bad input gets rejected
 
 ```text
 get_current_weather(location="https://evil.example")
 ```
-
-Returns:
 
 ```json
 {
@@ -148,19 +144,21 @@ Returns:
 
 ## Tests and checks
 
-Run unit tests:
+Unit tests:
 
 ```bash
 pytest -q
 ```
 
-Run a live smoke check (needs internet, still no API key):
+Live smoke check (needs internet, still no API key):
 
 ```bash
 python scripts/smoke_check.py
 ```
 
-### Quick reviewer path (about 60 seconds)
+### Fast path for reviewers
+
+If you just want to confirm it works:
 
 ```bash
 pip install -r requirements.txt
@@ -169,48 +167,49 @@ pytest -q
 python scripts/smoke_check.py
 ```
 
-If both succeed, the core behaviour and live Open-Meteo path are working.
+If both pass, the core behaviour and live Open-Meteo path are good.
 
-## What could go wrong when an AI agent uses this tool?
+## What could go wrong when an AI agent uses this?
 
-This section is intentional. Tools used by agents need clear limits.
+This part mattered a lot to me. Once an AI can call a tool, you have to think about misuse — not just the happy path.
 
 ### 1) Bad input
-**Risk:** An agent might pass URLs, code, or nonsense instead of a place name.  
-**What I did:** Strict validation on location text (length + allowed characters). Invalid input fails fast with a clear error and never reaches Open-Meteo.
+An agent might pass a URL, random code, or nonsense instead of a city name.  
+I validate location text first (length + allowed characters). Bad input fails fast and never hits Open-Meteo.
 
 ### 2) The API failing
-**Risk:** Open-Meteo could time out or return an error.  
-**What I did:** HTTP timeouts, no redirect following, and friendly error messages. The tool returns `{ "ok": false, "error": "..." }` instead of crashing or inventing weather.
+Open-Meteo can time out or fail.  
+I use timeouts, don’t follow redirects, and return a clear `{ "ok": false, "error": "..." }` response. No crash, and no invented weather.
 
-### 3) The agent calling it in a way I didn’t intend
-**Risks:**
-- asking for a huge forecast window
-- hammering the API with repeated calls
-- trying to turn this into a general web-fetch tool
+### 3) The agent calling it in a weird way
+Things I worried about:
+- asking for a massive forecast window
+- calling the API over and over
+- trying to turn this into a general “fetch any website” tool
 
-**What I did:**
+What I did about it:
 - forecast days capped to **1–7**
-- client allowlisted to **Open-Meteo hosts only** (no arbitrary URLs)
-- tool descriptions tell the agent what valid input looks like
-- errors tell the agent to retry or clarify, not to guess weather values
+- client locked to **Open-Meteo hosts only**
+- tool descriptions that spell out valid input
+- errors that tell the agent to retry/clarify instead of guessing
 
 ### 4) Ambiguous place names
-**Risk:** “Springfield” could match many places.  
-**What I did:** Use Open-Meteo’s best single match and return the resolved place details so the agent/user can see which location was used. If nothing matches, return a clear “not found” error.
+“Springfield” could mean a lot of places.  
+I take Open-Meteo’s best match and return the resolved place details, so you can see which location was used. If nothing matches, you get a clear not-found error.
 
-## Design choices (short)
+## Design choices
 
-- **Small and correct** over large and unfinished  
-- **No API keys** so the demo is easy to run and safe to publish  
-- **Validation before network** so unsafe agent input fails cheaply  
-- **JSON responses with `ok`/`error`** so hosts/agents can handle failure cleanly  
+- Small and correct beats big and half-finished  
+- No API keys, so it’s easy and safe to try  
+- Validate before calling the network  
+- Return structured `ok` / `error` responses so failures are easy to handle  
 
 ## What I’d improve next
 
-- Add a tiny per-process rate limit for noisy agents  
-- Add optional lat/lon tools with the same strict bounds  
-- Add contract tests that freeze tool schemas for review  
+If I had another evening on this, I’d add:
+- a small rate limit for noisy agents  
+- optional lat/lon tools with the same strict checks  
+- contract tests that freeze the tool schemas  
 
 ## License
 
